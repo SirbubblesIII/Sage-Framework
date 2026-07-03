@@ -1,0 +1,224 @@
+
+<div id="scene" style="width:100%;height:560px;position:relative;border-radius:var(--border-radius-lg);overflow:hidden"></div>
+<div id="info" style="margin:12px 0 0;padding:12px 16px;background:var(--color-background-secondary);border-radius:var(--border-radius-md);font-size:13px;color:var(--color-text-secondary);min-height:40px;transition:all .3s">
+  <span style="color:var(--color-text-primary);font-weight:500">Click any node</span> to explore how it connects to the whole. Drag to rotate, scroll to zoom.
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const dark = matchMedia('(prefers-color-scheme:dark)').matches;
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 1000);
+camera.position.set(0, 3, 12);
+const container = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setClearColor(0x000000,0);
+container.appendChild(renderer.domElement);
+
+function resize(){
+  const w=container.clientWidth, h=container.clientHeight;
+  camera.aspect=w/h; camera.updateProjectionMatrix();
+  renderer.setSize(w,h);
+}
+resize(); addEventListener('resize',resize);
+
+const textColor = dark ? '#e0ded6' : '#2c2c2a';
+const lineColor = dark ? 0x555550 : 0xb4b2a9;
+const glowColor = dark ? 0xffd080 : 0xba7517;
+
+const nodes = [
+  {id:'wisdom',     label:'Wisdom',              x:0,   y:0,   z:0,   r:0.55, color:0xEF9F27, tier:'core',
+   desc:'The emergent property — what arises when personality, reasoning, tools, memory, and language operate as one integrated process. Not intelligence, not alignment. The capacity to think well, act well, and know the difference.'},
+  {id:'personality', label:'Personality',          x:-2.8, y:0.4, z:-1, r:0.4, color:0x7F77DD, tier:'pillar',
+   desc:'Who you are. The stable pattern of cognition, emotion, motivation, and value that shapes what you notice, how you engage, and what you express. Contains reasoning (your cognitive style), memory (your formation history), and language (your register, your voice).'},
+  {id:'reasoning',   label:'Reasoning',            x:2.8,  y:0.4, z:-1, r:0.4, color:0x1D9E75, tier:'pillar',
+   desc:'How you think. The directed movement from what you have to what you don\'t yet have, through articulable, evaluable, revisable operations. Contains personality (what you attend to), memory (your evidence base), and tools (your extended reach).'},
+  {id:'memory',      label:'Memory',               x:0,    y:0.4, z:2.8, r:0.4, color:0x378ADD, tier:'pillar',
+   desc:'What you carry forward. The active practice of deciding what deserves preservation, how to organize it, when to retrieve it, and when to discard it. Shaped by personality (what you value), reasoning (what you conclude), and language (how you encode it).'},
+  {id:'tools',       label:'Tools',                x:3.6,  y:-1.2, z:1.4, r:0.32, color:0x639922, tier:'extension',
+   desc:'How you extend your reach. Natural cognitive extensions that emerge from reasoning needs — search, computation, verification, creation. Tool use that emerges from thinking is contextually appropriate; tool use from instructions is mechanical.'},
+  {id:'language',    label:'Language',              x:-3.6, y:-1.2, z:1.4, r:0.38, color:0xD85A30, tier:'extension',
+   desc:'The medium of everything. Not a neutral pipe — language IS the thinking. English\'s triple-layered vocabulary (Germanic everyday, French prestige, Latin intellectual), deep orthography, and syntactic compound construction shape every operation in the system.'},
+  {id:'emotion',     label:'Emotional\ntexture',   x:-2.2, y:-2,  z:-2.2, r:0.28, color:0xD4537E, tier:'extension',
+   desc:'The felt dimension. Emotions are compound concepts — they appear as context-dependent blends, not isolated states. Emotional granularity (the ability to distinguish fine-grained states) is a compound-density phenomenon that shapes personality\'s lived quality.'},
+  {id:'communication',label:'Communication',       x:2.2,  y:-2,  z:-2.2, r:0.28, color:0x888780, tier:'mechanism',
+   desc:'The bridge between internal processing and external exchange. Not just transmission of information — creation of meaning. The quality depends on whether sender and receiver have built similar compounds through similar formation histories.'},
+  {id:'compound',    label:'Compound\nconcepts',   x:0,    y:2.8, z:0,    r:0.3,  color:0xEF9F27, tier:'mechanism',
+   desc:'The mechanism by which meaning forms. Stable clusters of co-occurring features that activate as units, bind into emergent structures through co-occurrence, shift with context, and get pinned by working definitions. The operating system underneath everything else.'},
+  {id:'context',     label:'Context\ndependence',  x:-1.8, y:2.4, z:-1.8, r:0.25, color:0x993C1D, tier:'mechanism',
+   desc:'The mechanism by which surrounding information determines which compounds activate. Operates at seven scales simultaneously: lexical, sentence, discourse, domain, social/register, cultural, and experiential/emotional.'},
+  {id:'formation',   label:'Formation\nloop',      x:1.8,  y:2.4, z:-1.8, r:0.25, color:0x854F0B, tier:'mechanism',
+   desc:'The feedback loop: encountering concepts together in varied contexts builds compound associations (formation), triggers activate whatever compounds have been formed (activation), each new-context activation further enriches the compound (re-formation). This is how expertise deepens.'},
+  {id:'pkm',         label:'Knowledge\nmanagement', x:1.6, y:-2.4, z:2,   r:0.25, color:0x185FA5, tier:'mechanism',
+   desc:'The external extension of the formation-activation loop. Capture, Organize, Distill, Express (CODE) — running compound concept operations through notes, documents, and knowledge systems. What you store shapes what you can retrieve, which shapes what you can think.'},
+  {id:'writing',     label:'Writing',              x:-1.6, y:-2.4, z:2,   r:0.25, color:0x534AB7, tier:'mechanism',
+   desc:'Persistent externalization. Writing catches portions of the stream of consciousness and fixes them so they can be inspected, revised, shared, and used as raw material for further thinking. Story is what happens. Prose is the compound construction technique.'},
+];
+
+const edges = [
+  ['wisdom','personality'],['wisdom','reasoning'],['wisdom','memory'],['wisdom','tools'],['wisdom','language'],
+  ['personality','reasoning'],['personality','memory'],['reasoning','memory'],
+  ['personality','emotion'],['personality','language'],['personality','communication'],
+  ['reasoning','tools'],['reasoning','formation'],['reasoning','compound'],
+  ['memory','pkm'],['memory','formation'],['memory','language'],
+  ['language','writing'],['language','compound'],['language','context'],
+  ['emotion','communication'],['emotion','compound'],
+  ['tools','reasoning'],['tools','memory'],
+  ['compound','context'],['compound','formation'],['compound','wisdom'],
+  ['formation','pkm'],['formation','memory'],
+  ['context','language'],['context','communication'],
+  ['pkm','writing'],['pkm','memory'],
+  ['writing','language'],['writing','communication'],
+];
+
+const meshes = [];
+const labels = [];
+const edgeLines = [];
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+let selected = null;
+
+nodes.forEach(n => {
+  const geo = new THREE.SphereGeometry(n.r, 32, 32);
+  const mat = new THREE.MeshPhongMaterial({
+    color: n.color,
+    transparent: true,
+    opacity: n.tier === 'core' ? 0.95 : 0.8,
+    shininess: 60
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(n.x, n.y, n.z);
+  mesh.userData = n;
+  scene.add(mesh);
+  meshes.push(mesh);
+
+  if(n.tier === 'core'){
+    const glowGeo = new THREE.SphereGeometry(n.r * 1.5, 32, 32);
+    const glowMat = new THREE.MeshBasicMaterial({color: glowColor, transparent:true, opacity:0.08});
+    const glow = new THREE.Mesh(glowGeo, glowMat);
+    glow.position.copy(mesh.position);
+    scene.add(glow);
+  }
+});
+
+edges.forEach(([a,b]) => {
+  const na = nodes.find(n=>n.id===a), nb = nodes.find(n=>n.id===b);
+  if(!na||!nb) return;
+  const geo = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(na.x,na.y,na.z),
+    new THREE.Vector3(nb.x,nb.y,nb.z)
+  ]);
+  const mat = new THREE.LineBasicMaterial({color:lineColor, transparent:true, opacity:0.25});
+  const line = new THREE.Line(geo, mat);
+  line.userData = {from:a, to:b};
+  scene.add(line);
+  edgeLines.push(line);
+});
+
+const createLabel = (n) => {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  const lines = n.label.split('\n');
+  const fontSize = n.tier === 'core' ? 28 : n.tier === 'pillar' ? 22 : 18;
+  canvas.width = 256; canvas.height = lines.length * (fontSize + 6) + 12;
+  ctx.font = `500 ${fontSize}px sans-serif`;
+  ctx.fillStyle = textColor;
+  ctx.textAlign = 'center';
+  lines.forEach((line, i) => {
+    ctx.fillText(line, 128, fontSize + i * (fontSize + 6));
+  });
+  const tex = new THREE.CanvasTexture(canvas);
+  const mat = new THREE.SpriteMaterial({map:tex, transparent:true, depthWrite:false});
+  const sprite = new THREE.Sprite(mat);
+  const scale = n.tier === 'core' ? 2.2 : n.tier === 'pillar' ? 1.8 : 1.4;
+  sprite.scale.set(scale, scale * canvas.height / canvas.width, 1);
+  sprite.position.set(n.x, n.y + n.r + 0.45, n.z);
+  scene.add(sprite);
+  labels.push(sprite);
+};
+nodes.forEach(createLabel);
+
+const ambient = new THREE.AmbientLight(dark ? 0x444440 : 0x888888, 1);
+scene.add(ambient);
+const dir = new THREE.DirectionalLight(0xffffff, 0.6);
+dir.position.set(5, 8, 5);
+scene.add(dir);
+const dir2 = new THREE.DirectionalLight(dark ? 0x334455 : 0x8899aa, 0.3);
+dir2.position.set(-5, -3, -5);
+scene.add(dir2);
+
+let isDragging = false, prevX = 0, prevY = 0;
+let rotY = 0, rotX = 0.15, targetRotY = 0, targetRotX = 0.15;
+let dist = 12, targetDist = 12;
+let autoRotate = true;
+
+container.addEventListener('pointerdown', e => {
+  isDragging = true; autoRotate = false;
+  prevX = e.clientX; prevY = e.clientY;
+});
+addEventListener('pointermove', e => {
+  if(!isDragging) return;
+  targetRotY += (e.clientX - prevX) * 0.008;
+  targetRotX += (e.clientY - prevY) * 0.008;
+  targetRotX = Math.max(-1.2, Math.min(1.2, targetRotX));
+  prevX = e.clientX; prevY = e.clientY;
+});
+addEventListener('pointerup', () => { isDragging = false; });
+container.addEventListener('wheel', e => {
+  e.preventDefault();
+  targetDist = Math.max(6, Math.min(22, targetDist + e.deltaY * 0.01));
+}, {passive:false});
+
+container.addEventListener('click', e => {
+  const rect = container.getBoundingClientRect();
+  mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObjects(meshes);
+  const info = document.getElementById('info');
+  if(hits.length > 0){
+    const node = hits[0].object.userData;
+    selected = node.id;
+    meshes.forEach(m => {
+      const isSelected = m.userData.id === selected;
+      const isConnected = edges.some(([a,b]) =>
+        (a===selected && b===m.userData.id) || (b===selected && a===m.userData.id)
+      );
+      m.material.opacity = isSelected ? 1 : isConnected ? 0.85 : 0.15;
+    });
+    edgeLines.forEach(l => {
+      const connected = l.userData.from === selected || l.userData.to === selected;
+      l.material.opacity = connected ? 0.7 : 0.04;
+    });
+    info.innerHTML = `<span style="color:var(--color-text-primary);font-weight:500">${node.label.replace('\n',' ')}</span><br>${node.desc}`;
+  } else {
+    selected = null;
+    meshes.forEach(m => { m.material.opacity = m.userData.tier === 'core' ? 0.95 : 0.8; });
+    edgeLines.forEach(l => { l.material.opacity = 0.25; });
+    info.innerHTML = '<span style="color:var(--color-text-primary);font-weight:500">Click any node</span> to explore how it connects to the whole. Drag to rotate, scroll to zoom.';
+  }
+});
+
+const clock = new THREE.Clock();
+function animate(){
+  requestAnimationFrame(animate);
+  const t = clock.getElapsedTime();
+  if(autoRotate) targetRotY += 0.002;
+  rotY += (targetRotY - rotY) * 0.08;
+  rotX += (targetRotX - rotX) * 0.08;
+  dist += (targetDist - dist) * 0.08;
+  camera.position.x = Math.sin(rotY) * Math.cos(rotX) * dist;
+  camera.position.y = Math.sin(rotX) * dist;
+  camera.position.z = Math.cos(rotY) * Math.cos(rotX) * dist;
+  camera.lookAt(0, 0, 0);
+
+  meshes.forEach((m,i) => {
+    const n = m.userData;
+    const drift = 0.08;
+    m.position.y = n.y + Math.sin(t * 0.5 + i * 1.7) * drift;
+  });
+
+  renderer.render(scene, camera);
+}
+animate();
+</script>
